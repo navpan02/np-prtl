@@ -374,7 +374,20 @@ const Navigation = ({ activeTab, setActiveTab }) => {
 };
 
 // Home Page
-const HomePage = ({ setActiveTab }) => (
+const FOLDER_ICONS = ['📋', '📝', '⚡', '🔧', '📊', '🔐', '🌐', '📡'];
+
+const HomePage = ({ setActiveTab, collection }) => {
+  const folders = [...new Set(collection.endpoints.map(ep => ep.folder))];
+  const featureCards = folders.map((folder, i) => {
+    const count = collection.endpoints.filter(ep => ep.folder === folder).length;
+    return {
+      icon: FOLDER_ICONS[i % FOLDER_ICONS.length],
+      title: folder,
+      desc: `${count} endpoint${count !== 1 ? 's' : ''}`
+    };
+  });
+
+  return (
   <div style={{ maxWidth: '900px', margin: '0 auto' }}>
     <div style={{
       textAlign: 'center',
@@ -393,37 +406,33 @@ const HomePage = ({ setActiveTab }) => (
         backgroundSize: '60px 60px',
         opacity: 0.3
       }} />
-      <h1 style={{ 
-        fontSize: '48px', 
-        fontWeight: '800', 
+      <h1 style={{
+        fontSize: '48px',
+        fontWeight: '800',
         margin: '0 0 16px 0',
         fontFamily: "'Playfair Display', Georgia, serif",
         position: 'relative'
       }}>
-        🌿 Lawn Care Marketplace API
+        {collection.info.name}
       </h1>
-      <p style={{ 
-        fontSize: '20px', 
-        opacity: 0.95, 
+      <p style={{
+        fontSize: '20px',
+        opacity: 0.95,
         margin: 0,
         fontWeight: '400',
         position: 'relative'
       }}>
-        Build powerful lawn care applications with our RESTful API
+        {collection.info.description}
       </p>
     </div>
-    
+
     <div style={{
       display: 'grid',
-      gridTemplateColumns: 'repeat(3, 1fr)',
+      gridTemplateColumns: `repeat(${Math.min(featureCards.length, 3)}, 1fr)`,
       gap: '20px',
       marginBottom: '40px'
     }}>
-      {[
-        { icon: '📋', title: 'Authentication', desc: 'Secure signup & login with API key auth' },
-        { icon: '📝', title: 'Quote Management', desc: 'Submit and track service quotes' },
-        { icon: '⚡', title: 'RESTful Design', desc: 'Clean, predictable API endpoints' }
-      ].map((item, i) => (
+      {featureCards.map((item, i) => (
         <div key={i} style={{
           padding: '28px',
           backgroundColor: '#fff',
@@ -498,31 +507,32 @@ const HomePage = ({ setActiveTab }) => (
       </div>
     </div>
   </div>
-);
+  );
+};
 
 // API Explorer
-const APIExplorer = ({ onSelectEndpoint, selectedEndpoint, apiKey }) => {
+const APIExplorer = ({ onSelectEndpoint, selectedEndpoint, apiKey, collection }) => {
   const [search, setSearch] = useState('');
   const [methodFilter, setMethodFilter] = useState('ALL');
-  
+
   const folders = useMemo(() => {
     const grouped = {};
-    API_COLLECTION.endpoints.forEach(ep => {
+    collection.endpoints.forEach(ep => {
       if (!grouped[ep.folder]) grouped[ep.folder] = [];
       grouped[ep.folder].push(ep);
     });
     return grouped;
-  }, []);
-  
+  }, [collection]);
+
   const filteredEndpoints = useMemo(() => {
-    return API_COLLECTION.endpoints.filter(ep => {
-      const matchesSearch = search === '' || 
+    return collection.endpoints.filter(ep => {
+      const matchesSearch = search === '' ||
         ep.name.toLowerCase().includes(search.toLowerCase()) ||
         ep.path.toLowerCase().includes(search.toLowerCase());
       const matchesMethod = methodFilter === 'ALL' || ep.method === methodFilter;
       return matchesSearch && matchesMethod;
     });
-  }, [search, methodFilter]);
+  }, [search, methodFilter, collection]);
   
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '24px', height: 'calc(100vh - 200px)' }}>
@@ -628,7 +638,7 @@ const APIExplorer = ({ onSelectEndpoint, selectedEndpoint, apiKey }) => {
         padding: '28px'
       }}>
         {selectedEndpoint ? (
-          <EndpointDetail endpoint={selectedEndpoint} apiKey={apiKey} />
+          <EndpointDetail endpoint={selectedEndpoint} apiKey={apiKey} baseUrl={collection.info.baseUrl} />
         ) : (
           <div style={{
             height: '100%',
@@ -648,9 +658,8 @@ const APIExplorer = ({ onSelectEndpoint, selectedEndpoint, apiKey }) => {
 };
 
 // Endpoint Detail
-const EndpointDetail = ({ endpoint, apiKey }) => {
+const EndpointDetail = ({ endpoint, apiKey, baseUrl }) => {
   const [activeSnippet, setActiveSnippet] = useState('curl');
-  const baseUrl = API_COLLECTION.info.baseUrl;
   
   const snippets = {
     curl: generateCurl(endpoint, baseUrl, apiKey),
@@ -784,7 +793,7 @@ const EndpointDetail = ({ endpoint, apiKey }) => {
 };
 
 // API Playground
-const Playground = ({ apiKey, setApiKey }) => {
+const Playground = ({ apiKey, setApiKey, collection }) => {
   const [selectedEndpoint, setSelectedEndpoint] = useState(null);
   const [requestBody, setRequestBody] = useState('');
   const [pathParams, setPathParams] = useState({});
@@ -866,7 +875,7 @@ const Playground = ({ apiKey, setApiKey }) => {
           </label>
           <select
             value={selectedEndpoint?.id || ''}
-            onChange={e => setSelectedEndpoint(API_COLLECTION.endpoints.find(ep => ep.id === e.target.value))}
+            onChange={e => setSelectedEndpoint(collection.endpoints.find(ep => ep.id === e.target.value))}
             style={{
               width: '100%',
               padding: '12px',
@@ -878,7 +887,7 @@ const Playground = ({ apiKey, setApiKey }) => {
             }}
           >
             <option value="">Select an endpoint...</option>
-            {API_COLLECTION.endpoints.map(ep => (
+            {collection.endpoints.map(ep => (
               <option key={ep.id} value={ep.id}>
                 {ep.method} {ep.path} — {ep.name}
               </option>
@@ -1410,14 +1419,15 @@ const Dashboard = ({ requests, onApprove }) => {
 // MAIN APP
 // ============================================
 
-export default function LawnCareDevPortal() {
+export default function LawnCareDevPortal({ apiCollection = API_COLLECTION, brandName, brandIcon }) {
+  const collection = apiCollection;
+  const displayName = brandName || collection.info.name;
+  const displayIcon = brandIcon || '🌿';
+
   const [activeTab, setActiveTab] = useState('home');
   const [selectedEndpoint, setSelectedEndpoint] = useState(null);
   const [apiKey, setApiKey] = useState('');
-  const [requests, setRequests] = useState(() => {
-    // Note: Using in-memory storage since localStorage is not available
-    return [];
-  });
+  const [requests, setRequests] = useState([]);
   
   const handleKeyRequest = (form) => {
     const newRequest = {
@@ -1467,9 +1477,9 @@ export default function LawnCareDevPortal() {
         margin: '0 auto'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{ fontSize: '32px' }}>🌿</span>
+          <span style={{ fontSize: '32px' }}>{displayIcon}</span>
           <span style={{ fontSize: '20px', fontWeight: '700', color: '#166534' }}>
-            Lawn Care API
+            {displayName}
           </span>
         </div>
         <Navigation activeTab={activeTab} setActiveTab={setActiveTab} />
@@ -1477,16 +1487,17 @@ export default function LawnCareDevPortal() {
       
       {/* Main Content */}
       <main style={{ padding: '20px 40px 60px', maxWidth: '1400px', margin: '0 auto' }}>
-        {activeTab === 'home' && <HomePage setActiveTab={setActiveTab} />}
+        {activeTab === 'home' && <HomePage setActiveTab={setActiveTab} collection={collection} />}
         {activeTab === 'explorer' && (
           <APIExplorer
             onSelectEndpoint={setSelectedEndpoint}
             selectedEndpoint={selectedEndpoint}
             apiKey={apiKey}
+            collection={collection}
           />
         )}
         {activeTab === 'playground' && (
-          <Playground apiKey={apiKey} setApiKey={setApiKey} />
+          <Playground apiKey={apiKey} setApiKey={setApiKey} collection={collection} />
         )}
         {activeTab === 'request-key' && (
           <RequestKeyForm onSubmit={handleKeyRequest} />
@@ -1505,7 +1516,7 @@ export default function LawnCareDevPortal() {
         fontSize: '14px'
       }}>
         <p style={{ margin: 0 }}>
-          🌿 Lawn Care Marketplace API • Documentation Portal
+          {displayIcon} {displayName} • Documentation Portal
         </p>
       </footer>
     </div>
